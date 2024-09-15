@@ -1,0 +1,29 @@
+# Cargo build artifacts
+target/
+# Editor files
+.idea/
+*.iml
+# Build output
+out/
+# Test output
+test/
+# Benchmark output
+bench/
+# Coverage output
+coverage/
+# Build output for other targets
+**/target/
+**/out/
+**/test/
+**/bench/
+**/coverage/
+# Compiled libraries
+lib/
+# Generated documentation
+doc/
+# Generated code
+**/.rs.d
+# Old Cargo output
+Cargo.lock
+# Rust analyzer cache
+.rust-analyzer/
