@@ -1,39 +1,10 @@
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Version {
-    pub version: VersionNumber,
-    pub url: String,
-}
+mod version;
+mod version_details;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Endpoint {
-    pub identifier: ModuleID,
-    pub role: InterfaceRole,
-    pub url: String,
-}
+pub use version::*;
+pub use version_details::*;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VersionDetails {
-    pub version: VersionNumber,
-    pub endpoints: Vec<Endpoint>,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "snake_case")]
-pub enum InterfaceRole {
-    Sender,
-    Receiver,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "snake_case")]
-pub enum ModuleID {
-    Cdrs,
-    ChargingProfiles,
-    Commands,
-    Credentials,
-    HubClientInfo,
-    Locations,
-    Sessions,
-    Tariffs,
-    Tokens,
+pub trait VersionsModule {
+    fn get_versions(&self) -> Result<Vec<Version>, Box<dyn std::error::Error>>;
+    fn get_version_details(&self, version: &str) -> Result<VersionDetails, Box<dyn std::error::Error>>;
 }
