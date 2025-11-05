@@ -1,4 +1,4 @@
-.PHONY: help build run test test-coverage clean docker-up docker-down
+.PHONY: help build run test test-coverage clean docker-up docker-down test-integration test-all
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -14,17 +14,29 @@ run: ## Run the application
 	@echo "Running..."
 	go run cmd/server/main.go
 
-test: ## Run tests
-	@echo "Running tests..."
+test: ## Run unit tests only (fast)
+	@echo "Running unit tests..."
+	go test -v -short ./...
+
+test-integration: docker-up ## Run integration tests (requires Docker)
+	@echo "Running integration tests..."
+	@echo "Waiting for MongoDB to be ready..."
+	@sleep 3
+	go test -v -run Integration ./internal/api/...
+
+test-all: docker-up ## Run all tests (unit + integration)
+	@echo "Running all tests..."
+	@echo "Waiting for MongoDB to be ready..."
+	@sleep 3
 	go test -v ./...
 
-test-coverage: ## Run tests with coverage
+test-coverage: ## Run all tests with coverage
 	@echo "Running tests with coverage..."
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-test-unit: ## Run unit tests only
+test-unit: ## Run unit tests only (alias for test)
 	@echo "Running unit tests..."
 	go test -v -short ./...
 

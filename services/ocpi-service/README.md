@@ -99,10 +99,35 @@ curl http://localhost:8080/health
 
 ## Testing
 
-### Run All Tests
+### Run Unit Tests (Fast)
+
+Unit tests use mocks and don't require infrastructure:
 
 ```bash
 make test
+# or
+make test-unit
+```
+
+### Run Integration Tests
+
+Integration tests use real MongoDB and test the full stack:
+
+```bash
+make test-integration
+```
+
+This will:
+1. Start Docker containers (MongoDB, Redis, Temporal)
+2. Wait for services to be ready
+3. Run integration tests with real database
+
+**Note:** Integration tests require Docker to be running.
+
+### Run All Tests (Unit + Integration)
+
+```bash
+make test-all
 ```
 
 ### Run Tests with Coverage
@@ -113,11 +138,20 @@ make test-coverage
 
 This generates `coverage.html` that you can open in a browser.
 
-### Run Unit Tests Only
+### Test Structure
 
-```bash
-make test-unit
-```
+**Unit Tests:**
+- `internal/domain/services/*_test.go` - Business logic tests
+- `internal/api/handlers/*_test.go` - HTTP handler tests
+- Use mocks for dependencies
+- Fast execution (~1 second)
+
+**Integration Tests:**
+- `internal/api/integration_test.go` - Full stack tests
+- Uses real MongoDB database
+- Tests complete HTTP request/response flows
+- Tests data persistence
+- Slower execution (~5-10 seconds)
 
 ## API Documentation
 
@@ -447,23 +481,47 @@ ocpi:
 
 ## Testing Strategy
 
-### Unit Tests
+### Unit Tests ✅
 
 - ✅ Service layer tests (business logic)
 - ✅ Handler tests (HTTP endpoints)
 - ✅ Mock dependencies (repository, services)
 - ✅ Edge cases and error handling
+- ✅ Fast execution (~1 second)
 
-### Integration Tests (TODO)
+### Integration Tests ✅
 
-- Database operations
-- Full API flows
-- Multiple partners interacting
+- ✅ Complete partner registration flow
+- ✅ Register → Get → Update → Delete lifecycle
+- ✅ Multiple partners (CPO and eMSP) registration
+- ✅ Duplicate partner registration validation
+- ✅ Invalid token authentication
+- ✅ Missing authorization header handling
+- ✅ Invalid request body validation
+- ✅ Invalid role for partner type
+- ✅ Invalid country code (must be 2 chars)
+- ✅ Invalid party ID (must be 3 chars)
+- ✅ Health check endpoint
+- ✅ Data persistence verification (MongoDB)
+- ✅ Concurrent registrations (10 partners)
+- ✅ Token prefix handling (with/without "Token ")
+- ✅ Real MongoDB database operations
+- ✅ Full HTTP request/response flows
+
+**Coverage:**
+- 14 integration test scenarios
+- Complete CRUD operations
+- Authentication and authorization
+- Data validation
+- Concurrency handling
+- Database persistence
 
 ### Load Tests (TODO)
 
-- Concurrent registrations
-- Token validation performance
+- High-volume concurrent registrations
+- Token validation performance under load
+- Database query optimization
+- Response time benchmarks
 
 ---
 
