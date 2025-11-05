@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: charge-sphere-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: chargesphere
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - charge-sphere-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: charge-sphere-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - charge-sphere-network
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: charge-sphere-temporal
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    environment:
+      - DB=mongodb
+      - MONGODB_SEEDS=mongodb:27017
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin123
+    depends_on:
+      - mongodb
+    networks:
+      - charge-sphere-network
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: charge-sphere-temporal-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
+    networks:
+      - charge-sphere-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  charge-sphere-network:
+    driver: bridge

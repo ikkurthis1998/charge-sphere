@@ -1,0 +1,23 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug" # debug, release
+
+mongodb:
+  uri: "mongodb://admin:admin123@localhost:27017"
+  database: "chargesphere"
+  timeout: 10
+
+redis:
+  host: "localhost:6379"
+  password: ""
+  db: 0
+
+temporal:
+  host: "localhost:7233"
+  namespace: "default"
+
+ocpi:
+  version: "2.3"
+  country_code: "US"
+  party_id: "CSP" # ChargeSphere
