@@ -1,0 +1,215 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  GO_VERSION: "1.21"
+
+jobs:
+  # Test job - runs on all events
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin123
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/ocpi-service/go.sum
+
+      - name: Install dependencies
+        working-directory: services/ocpi-service
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Run linter
+        working-directory: services/ocpi-service
+        run: |
+          go fmt ./...
+          go vet ./...
+
+      - name: Run unit tests
+        working-directory: services/ocpi-service
+        run: |
+          go test -v -short -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Run integration tests
+        working-directory: services/ocpi-service
+        env:
+          MONGODB_URI: mongodb://admin:admin123@localhost:27017
+          REDIS_HOST: localhost:6379
+        run: |
+          go test -v -run Integration ./...
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: services/ocpi-service/coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+  # Build job - runs only on push to main/develop
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        working-directory: services/ocpi-service
+        run: |
+          docker build -t charge-sphere/ocpi-service:${{ github.sha }} .
+          docker build -t charge-sphere/ocpi-service:latest .
+
+      - name: Test Docker image
+        run: |
+          docker run -d --name test-container -p 8080:8080 \
+            -e SERVER_HOST=0.0.0.0 \
+            -e SERVER_PORT=8080 \
+            -e SERVER_MODE=release \
+            -e MONGODB_URI=mongodb://test:test@localhost:27017 \
+            -e MONGODB_DATABASE=test \
+            charge-sphere/ocpi-service:latest
+
+          # Wait for container to start
+          sleep 5
+
+          # Test health endpoint
+          curl -f http://localhost:8080/health || exit 1
+
+          # Cleanup
+          docker stop test-container
+          docker rm test-container
+
+  # Deploy job - runs only on push to main
+  deploy:
+    name: Deploy to DigitalOcean
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Deploy to App Platform
+        run: |
+          # Get app ID from secrets or detect automatically
+          APP_ID=${{ secrets.DIGITALOCEAN_APP_ID }}
+
+          if [ -z "$APP_ID" ]; then
+            echo "No APP_ID found, listing apps..."
+            doctl apps list
+          else
+            echo "Triggering deployment for app: $APP_ID"
+            doctl apps create-deployment $APP_ID --force-rebuild
+          fi
+
+      - name: Wait for deployment
+        run: |
+          APP_ID=${{ secrets.DIGITALOCEAN_APP_ID }}
+          if [ ! -z "$APP_ID" ]; then
+            echo "Waiting for deployment to complete..."
+            # Wait up to 10 minutes for deployment
+            for i in {1..60}; do
+              STATUS=$(doctl apps get $APP_ID --format Phase --no-header)
+              echo "Deployment status: $STATUS"
+
+              if [ "$STATUS" == "ACTIVE" ]; then
+                echo "Deployment successful!"
+                exit 0
+              elif [ "$STATUS" == "ERROR" ]; then
+                echo "Deployment failed!"
+                exit 1
+              fi
+
+              sleep 10
+            done
+
+            echo "Deployment timed out"
+            exit 1
+          fi
+
+      - name: Verify deployment
+        run: |
+          APP_URL=${{ secrets.APP_URL }}
+          if [ ! -z "$APP_URL" ]; then
+            echo "Testing deployed app at $APP_URL"
+            curl -f $APP_URL/health || exit 1
+            echo "Health check passed!"
+          fi
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+          fi
+
+  # Notification job - runs on workflow completion
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [test, build, deploy]
+    if: always()
+
+    steps:
+      - name: Deployment Status
+        run: |
+          echo "Test Status: ${{ needs.test.result }}"
+          echo "Build Status: ${{ needs.build.result }}"
+          echo "Deploy Status: ${{ needs.deploy.result }}"
+
+          # You can add Slack/Discord/Email notifications here
+          # Example with Slack:
+          # - uses: 8398a7/action-slack@v3
+          #   with:
+          #     status: ${{ job.status }}
+          #     webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}

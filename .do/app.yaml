@@ -1,0 +1,100 @@
+name: charge-sphere
+region: nyc
+
+# Databases
+databases:
+  - name: chargesphere-db
+    engine: MONGODB
+    version: "7"
+    size: db-s-1vcpu-1gb
+    num_nodes: 1
+    production: false
+
+  - name: chargesphere-redis
+    engine: REDIS
+    version: "7"
+    size: db-s-1vcpu-1gb
+    num_nodes: 1
+    production: false
+
+# Services
+services:
+  - name: ocpi-service
+    github:
+      repo: ikkurthis1998/charge-sphere
+      branch: main
+      deploy_on_push: true
+
+    source_dir: /services/ocpi-service
+
+    dockerfile_path: services/ocpi-service/Dockerfile
+
+    build_command: |
+      echo "Building OCPI service..."
+
+    run_command: /app/server
+
+    envs:
+      - key: SERVER_HOST
+        value: "0.0.0.0"
+      - key: SERVER_PORT
+        value: "8080"
+      - key: SERVER_MODE
+        value: "release"
+
+      - key: MONGODB_URI
+        value: ${chargesphere-db.DATABASE_URL}
+      - key: MONGODB_DATABASE
+        value: "chargesphere"
+      - key: MONGODB_TIMEOUT
+        value: "10"
+
+      - key: REDIS_HOST
+        value: ${chargesphere-redis.HOSTNAME}:${chargesphere-redis.PORT}
+      - key: REDIS_PASSWORD
+        value: ${chargesphere-redis.PASSWORD}
+      - key: REDIS_DB
+        value: "0"
+
+      - key: TEMPORAL_HOST
+        value: "localhost:7233"
+        scope: RUN_TIME
+      - key: TEMPORAL_NAMESPACE
+        value: "default"
+
+      - key: OCPI_VERSION
+        value: "2.3"
+      - key: OCPI_COUNTRY_CODE
+        value: "US"
+      - key: OCPI_PARTY_ID
+        value: "CSP"
+
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+
+    http_port: 8080
+
+    instance_count: 2
+    instance_size_slug: basic-xs
+
+    routes:
+      - path: /
+
+    cors:
+      allow_origins:
+        - prefix: https://
+      allow_methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allow_headers:
+        - Content-Type
+        - Authorization

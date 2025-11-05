@@ -43,16 +43,39 @@ type OCPIConfig struct {
 	PartyID     string `mapstructure:"party_id"`
 }
 
-// Load reads configuration from file
+// Load reads configuration from file and environment variables
 func Load(configPath string) (*Config, error) {
+	// Set up environment variable binding
+	viper.SetEnvPrefix("")
+	viper.AutomaticEnv()
+
+	// Map environment variables to config keys
+	viper.BindEnv("server.host", "SERVER_HOST")
+	viper.BindEnv("server.port", "SERVER_PORT")
+	viper.BindEnv("server.mode", "SERVER_MODE")
+
+	viper.BindEnv("mongodb.uri", "MONGODB_URI")
+	viper.BindEnv("mongodb.database", "MONGODB_DATABASE")
+	viper.BindEnv("mongodb.timeout", "MONGODB_TIMEOUT")
+
+	viper.BindEnv("redis.host", "REDIS_HOST")
+	viper.BindEnv("redis.password", "REDIS_PASSWORD")
+	viper.BindEnv("redis.db", "REDIS_DB")
+
+	viper.BindEnv("temporal.host", "TEMPORAL_HOST")
+	viper.BindEnv("temporal.namespace", "TEMPORAL_NAMESPACE")
+
+	viper.BindEnv("ocpi.version", "OCPI_VERSION")
+	viper.BindEnv("ocpi.country_code", "OCPI_COUNTRY_CODE")
+	viper.BindEnv("ocpi.party_id", "OCPI_PARTY_ID")
+
+	// Try to read config file (optional in production)
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
 
-	// Read environment variables
-	viper.AutomaticEnv()
-
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		// Config file is optional if all env vars are set
+		fmt.Printf("Warning: config file not found, using environment variables\n")
 	}
 
 	var config Config
